@@ -13,9 +13,9 @@ environment.
 
 
 # path to caption data
-CAPTION_DIR = ""
+CAPTION_DIR = "C:\\Users\\Sarah Smith\\Google Drive\\University\\Leeds\\CDT\\Year 1\\Semester 2\\COMP5623M - Artificial Intelligence\\Coursework\\Coursework 2\\flickr8k-custom\\captions\\"
 # path to images
-IMAGE_DIR = ""
+IMAGE_DIR = "C:\\Users\\Sarah Smith\\Google Drive\\University\\Leeds\\CDT\\Year 1\\Semester 2\\COMP5623M - Artificial Intelligence\\Coursework\\Coursework 2\\Flicker8k_Dataset\\"
 
 # token file names to read from
 TOKEN_FILE_TRAIN = CAPTION_DIR + "Flickr8k_train.token.txt"
