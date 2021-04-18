@@ -41,6 +41,7 @@ def parse_lines(lines):
     image_ids = []
     cleaned_captions = []
     
+    # QUESTION 1.1
     bad_chars = '''!()-[]{};:`"'\,<>./?@#$%^&*_~1234567890'''
     for line in lines:
         image_id = line.split(".")
@@ -55,9 +56,6 @@ def parse_lines(lines):
                
         caption = caption.strip().lower()
         cleaned_captions.append(caption)
-
-    # QUESTION 1.1
-
 
     return image_ids, cleaned_captions
 
@@ -75,6 +73,26 @@ def build_vocab(cleaned_captions):
     # QUESTION 1.1
     # TODO collect words
 
+    all_words = []
+    print('Finding all words....')
+    for caption in cleaned_captions:
+        setence = caption.split()
+        for word in setence:
+            all_words.append(word)
+    
+    common_words = []
+
+    print('Finding all common words...')
+    
+    i = 0
+    for word in all_words:
+        if (word not in common_words) and (all_words.count(word) > 3):
+            #print(word)
+            common_words.append(word)
+            i += 1
+            print("Number of common words found: ", i)
+    print("Total number of common words found: ", len(common_words))
+
 
     # create a vocab instance
     vocab = Vocabulary()
@@ -86,7 +104,9 @@ def build_vocab(cleaned_captions):
     vocab.add_word('<unk>')
 
     # TODO add the rest of the words from the cleaned captions here
-    # vocab.add_word('word')
+    
+    for word in common_words:
+        vocab.add_word(word)
 
 
     return vocab
@@ -144,3 +164,21 @@ def caption_collate_fn(data):
         end = lengths[i]
         targets[i, :end] = cap[:end]        
     return images, targets, lengths
+
+
+# lines = read_lines(TOKEN_FILE_TRAIN)
+# # see what is in lines
+# print(lines[:2])
+
+# #########################################################################
+# #
+# #       QUESTION 1.1 Text preparation
+# # 
+# #########################################################################
+
+# image_ids, cleaned_captions = parse_lines(lines)
+# vocab = build_vocab(cleaned_captions)
+# print('Total vocab size: ', len(vocab))
+# print(vocab('girl'))
+# print(vocab('a'))
+# print(vocab('skateboard'))
