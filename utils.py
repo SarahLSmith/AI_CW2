@@ -37,9 +37,24 @@ def parse_lines(lines):
         image_ids (int list): list of image ids, with duplicates
         cleaned_captions (list of lists of str): lists of words
     """
+    #### will create issue for 's as these will remain as s
     image_ids = []
     cleaned_captions = []
-
+    
+    bad_chars = '''!()-[]{};:`"'\,<>./?@#$%^&*_~1234567890'''
+    for line in lines:
+        image_id = line.split(".")
+        image_ids.append(image_id[0])
+        
+        reference = line.split("\t")
+        caption = reference[1]
+        for char in caption:
+        
+            if char in bad_chars:
+                caption = caption.replace(char, "")
+               
+        caption = caption.strip().lower()
+        cleaned_captions.append(caption)
 
     # QUESTION 1.1
 
@@ -129,5 +144,3 @@ def caption_collate_fn(data):
         end = lengths[i]
         targets[i, :end] = cap[:end]        
     return images, targets, lengths
-
-

@@ -23,7 +23,7 @@ from config import *
 
 lines = read_lines(TOKEN_FILE_TRAIN)
 # see what is in lines
-# print(lines[:2])
+print(lines[:2])
 
 #########################################################################
 #
