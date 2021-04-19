@@ -20,79 +20,113 @@ from utils import *
 from config import *
 
 
+if __name__ == '__main__':
+    lines = read_lines(TOKEN_FILE_TRAIN)
+    # see what is in lines
+    print(lines[:2])
 
-lines = read_lines(TOKEN_FILE_TRAIN)
-# see what is in lines
-print(lines[:2])
+    #########################################################################
+    #
+    #       QUESTION 1.1 Text preparation
+    # 
+    #########################################################################
 
-#########################################################################
-#
-#       QUESTION 1.1 Text preparation
-# 
-#########################################################################
+    image_ids, cleaned_captions = parse_lines(lines)
+    # to check the results after writing the cleaning function
+    # print(image_ids[:2])
+    # print(cleaned_captions[:2])
 
-image_ids, cleaned_captions = parse_lines(lines)
-# to check the results after writing the cleaning function
-# print(image_ids[:2])
-# print(cleaned_captions[:2])
+    # vocab = build_vocab(cleaned_captions)
+    # to check the results
+    # print("Number of words in vocab:", vocab.idx)
 
-# vocab = build_vocab(cleaned_captions)
-# to check the results
-# print("Number of words in vocab:", vocab.idx)
-
-# sample each image once
-image_ids = image_ids[::5]
-
-
-# crop size matches the input dimensions expected by the pre-trained ResNet
-data_transform = transforms.Compose([ 
-    transforms.Resize(224), 
-    transforms.CenterCrop(224), 
-    transforms.ToTensor(),
-    transforms.Normalize((0.485, 0.456, 0.406),   # using ImageNet norms
-                         (0.229, 0.224, 0.225))])
-
-dataset_train = Flickr8k_Images(
-    image_ids=image_ids,
-    transform=data_transform,
-)
-
-train_loader = torch.utils.data.DataLoader(
-    dataset_train,
-    batch_size=64,
-    shuffle=False,
-    num_workers=2,
-)
-
-# device configuration
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = EncoderCNN().to(device)
+    # sample each image once
+    image_ids = image_ids[::5]
 
 
+    # crop size matches the input dimensions expected by the pre-trained ResNet
+    data_transform = transforms.Compose([ 
+        transforms.Resize(224), 
+        transforms.CenterCrop(224), 
+        transforms.ToTensor(),
+        transforms.Normalize((0.485, 0.456, 0.406),   # using ImageNet norms
+                            (0.229, 0.224, 0.225))])
 
-#########################################################################
-#
-#        QUESTION 1.2 Extracting image features
-# 
-#########################################################################
-features = []
+    dataset_train = Flickr8k_Images(
+        image_ids=image_ids,
+        transform=data_transform,
+    )
+
+    train_loader = torch.utils.data.DataLoader(
+        dataset_train,
+        batch_size=64,
+        shuffle=False,
+        num_workers=2,
+    )
+
+    # device configuration
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = EncoderCNN().to(device)
 
 
 
-# TODO loop through all image data, extracting features and saving them
-# no gradients needed
+    #########################################################################
+    #
+    #        QUESTION 1.2 Extracting image features
+    # 
+    #########################################################################
+    features = []
 
+
+
+    # TODO loop through all image data, extracting features and saving them
+    # no gradients needed
+
+    with torch.no_grad():
+        i = 0 
+        for images in train_loader:
+            images = images.to(device)
+            output = model(images)
+            batch_features = output[:,:,0,0]
+            features.append(batch_features)
+            i = i + 1
+            print('Extracting features for batch: ', i, 'out of ', (len(dataset_train)//64))
+
+        features = torch.cat(features)
+        print('shape: ' , features.shape)
+        print(features)
+            
+
+    # with torch.no_grad():
+    #     it = iter(train_loader)
+    #     first_images = next(it)
+    #     images = first_images.to(device)
+    #     output = model(images)
+    #     print(output.shape)
+    #     output = output[:,:,0,0]
+    #     print(output.shape)
+    #     features = output
+    #     next_images = next(it)
+    #     next_images = next_images.to(device)
+    #     output_2 = model(next_images)
+    #     print(output_2.shape)
+    #     output_2 = output_2[:,:,0,0]
+    #     print(output_2.shape)
+    #     features = torch.cat((features, output_2), 0)
+    #     print(features)
+    #     print(features.shape)
 
 
 
 
 # to check your results, features should be dimensions [len(train_set), 2048]
 # convert features to a PyTorch Tensor before saving
-# print(features.shape)
+    print([len(dataset_train), 2048])
+    print(features.shape)
 
 
 
 # save features
-torch.save(features, "features.pt")
+    #torch.save(features, "features.pt")
 
 

@@ -182,3 +182,4 @@ def caption_collate_fn(data):
 # print(vocab('girl'))
 # print(vocab('a'))
 # print(vocab('skateboard'))
+# print(len(image_ids))
