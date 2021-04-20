@@ -21,7 +21,7 @@ class EncoderCNN(nn.Module):
 
         # QUESTION 1.2
         # TODO
-
+        features = self.resnet(images)
 
         return features
 
