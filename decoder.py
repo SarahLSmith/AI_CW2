@@ -61,7 +61,7 @@ if __name__ == '__main__':
             dataset_train,
             batch_size=64, # change as needed
             shuffle=True,
-            num_workers=2, # may need to set to 0
+            num_workers=0, # may need to set to 0
             collate_fn=caption_collate_fn, # explicitly overwrite the collate_fn
         )
 
@@ -82,15 +82,31 @@ if __name__ == '__main__':
     #########################################################################
 
         # TODO write training loop on decoder here
+        for epoch in range(1, NUM_EPOCHS+1):
+            
+            epoch_loss = 0
+            n = 0 
+            for batch_idx, (inputs, captions, lengths) in enumerate(train_loader, 0):
+                
+                inputs = inputs.to(device)
+                
+                #lengths = lengths.to(device)
+                targets = pack_padded_sequence(captions, lengths, batch_first=True)[0]
+                targets = targets.to(device)
+                captions = captions.to(device)
+                optimizer.zero_grad()
 
 
+                outputs = decoder.forward(inputs, captions, lengths)
+                loss = criterion(outputs, targets)
+
+                loss.backward()
+                optimizer.step()
+                epoch_loss += loss.item()
+                n = n + 1
+            print(f"Epoch {epoch} loss: {epoch_loss/n:.4f}")
         # for each batch, prepare the targets using this torch.nn.utils.rnn function
-        # targets = pack_padded_sequence(captions, lengths, batch_first=True)[0]
-
-
-
-
-
+        
 
 
         # save model after training
