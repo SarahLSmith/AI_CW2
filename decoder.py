@@ -23,7 +23,7 @@ from config import *
 
 if __name__ == '__main__':
     # if false, train model; otherwise try loading model from checkpoint and evaluate
-    EVAL = False
+    EVAL = True
 
 
     # reconstruct the captions and vocab, just as in extract_features.py
