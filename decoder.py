@@ -117,6 +117,12 @@ if __name__ == '__main__':
     # if we already trained, and EVAL == True, reload saved model
     else:
 
+        test_lines = read_lines(TOKEN_FILE_TEST)
+        test_image_ids, test_cleaned_captions = parse_lines(test_lines)
+
+        all_test_image_ids = test_image_ids
+        test_image_ids = test_image_ids[::5]
+
         data_transform = transforms.Compose([ 
             transforms.Resize(224),     
             transforms.CenterCrop(224), 
@@ -124,17 +130,24 @@ if __name__ == '__main__':
             transforms.Normalize((0.485, 0.456, 0.406),   # using ImageNet norms
                                 (0.229, 0.224, 0.225))])
 
+        print('Preparing images....')
+        dataset_test = Flickr8k_Images(
+            image_ids=test_image_ids,
+            transform=data_transform,
+        )
 
-        test_lines = read_lines(TOKEN_FILE_TEST)
-        test_image_ids, test_cleaned_captions = parse_lines(test_lines)
-
-
+        test_loader = torch.utils.data.DataLoader(
+            dataset_test,
+            batch_size=64,
+            shuffle=False,
+            num_workers=2,
+        )
+        
         # load models
         encoder = EncoderCNN().to(device)
         decoder = torch.load("decoder.ckpt").to(device)
         encoder.eval()
         decoder.eval() # generate caption, eval mode to not influence batchnorm
-
 
 
     #########################################################################
@@ -143,9 +156,34 @@ if __name__ == '__main__':
     # 
     #########################################################################
 
+        test_features = []
+
+        with torch.no_grad():
+            i = 0 
+            for images in test_loader:
+                images = images.to(device)
+                output = encoder(images)
+                batch_test_features = output[:,:,0,0]
+                test_features.append(batch_test_features)
+                i = i + 1
+                print('Extracting features for batch: ', i, 'out of ', ((len(dataset_test)//64)+1))
+
+            test_features = torch.cat(test_features)
+            print('shape: ' , test_features.shape)
+            #print(test_features)
+
+        print('Generating captions...')
+        sample_ids = decoder.sample(test_features)
+        list_sample_ids = sample_ids.tolist()
+        #print(sample_ids)
 
         # TODO define decode_caption() function in utils.py
-        # predicted_caption = decode_caption(word_ids, vocab)
+
+        for idx, word_ids in enumerate(list_sample_ids):
+            predicted_caption = decode_caption(word_ids, vocab)
+            print('Predicted caption for: ', test_image_ids[idx])
+            print(predicted_caption)
+            print('----------------------------------------------------------------------------------------------------------------------------------------------------------------------------')
 
 
 

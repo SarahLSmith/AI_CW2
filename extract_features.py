@@ -127,6 +127,6 @@ if __name__ == '__main__':
 
 
 # save features
-    #torch.save(features, "features.pt")
+    torch.save(features, "features.pt")
 
 

@@ -122,8 +122,16 @@ def decode_caption(sampled_ids, vocab):
         predicted_caption (str): predicted string sentence
     """
     predicted_caption = ""
-
-
+    #list_sampled_ids = sampled_ids.tolist()
+    for word_id in sampled_ids:
+        word = vocab.idx2word[word_id]
+        #predicted_caption = predicted_caption + word
+        if word == '<end>':
+            break
+        elif word == '<start>':
+            continue
+        else:
+            predicted_caption = predicted_caption + word + ' '
     # QUESTION 2.1
 
 
