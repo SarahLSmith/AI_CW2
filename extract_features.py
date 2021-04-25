@@ -39,10 +39,10 @@ if __name__ == '__main__':
     vocab = build_vocab(cleaned_captions)
     # to check the results
     print("Number of words in vocab:", vocab.idx)
-    print('checkpoint 1')
+    
     # sample each image once
     image_ids = image_ids[::5]
-    print('checkpoint 2')
+  
     #print(image_ids)
 
     # crop size matches the input dimensions expected by the pre-trained ResNet

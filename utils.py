@@ -250,20 +250,60 @@ def get_bleu_score(predicted_caption, reference_captions):
     #reference_words_lst = [reference_words_lst]
     #print(reference_words_lst)
     # print(predicted_words_lst)
-    bleu = sentence_bleu(reference_words_lst, predicted_words, weights=(1, 0, 0, 0))
+    bleu = sentence_bleu(reference_words_lst, predicted_words, weights=(0.5, 0.5, 0, 0))
     return bleu
 
-def display_image_captions(row_df):
+def display_image_captions_bleu(row_df):
     img_path = IMAGE_DIR + str(row_df.iloc[0]['image_ids']) + '.jpg'
     img = Image.open(open(img_path, 'rb'))
     show_img = plt.imshow(img)
-    plt.show()
+    
+    print('----------------------------------------------------------------------------------------------------------------------------------------------------------------------------')
     print('Image ID: ', row_df.iloc[0]['image_ids'])
+    print('')
     print('Predicted caption: ', row_df.iloc[0]['predicted_caption'])
+    print('')
     print('Reference captions:')
     for cap in row_df.iloc[0]['reference_captions']:
         print(cap)
+    print('')
     print('Bleu score: ', row_df.iloc[0]['bleu_score'])
+    print('----------------------------------------------------------------------------------------------------------------------------------------------------------------------------')
+    plt.show()
+
+def display_image_captions_cosine(row_df):
+    img_path = IMAGE_DIR + str(row_df.iloc[0]['image_ids']) + '.jpg'
+    img = Image.open(open(img_path, 'rb'))
+    show_img = plt.imshow(img)
+    
+    print('----------------------------------------------------------------------------------------------------------------------------------------------------------------------------')
+    print('Image ID: ', row_df.iloc[0]['image_ids'])
+    print('')
+    print('Predicted caption: ', row_df.iloc[0]['predicted_caption'])
+    print('')
+    print('Reference captions:')
+    for cap in row_df.iloc[0]['reference_captions']:
+        print(cap)
+    print('')
+    print('Cosine Similarity score: ', row_df.iloc[0]['cosine_score'])
+    print('----------------------------------------------------------------------------------------------------------------------------------------------------------------------------')
+    plt.show()
+
+def get_average_caption_vectors(captions_lst, decoder, device, vocab,):
+    avrg_caps = []
+    for cap in captions_lst:
+        word_embeddings = []
+        for word in cap.split():
+            lookup_tensor = torch.tensor([vocab.word2idx[word]], dtype=torch.long)
+            lookup_tensor = lookup_tensor.to(device)
+            embedding = decoder.embed(lookup_tensor)
+            word_embeddings.append(embedding)
+        cap_word_embeddings = torch.cat(word_embeddings)
+        sum_cap_word_embeddings = cap_word_embeddings.sum(0)
+        avrg_cap_word_embeddings = torch.div(sum_cap_word_embeddings, cap_word_embeddings.shape[1])
+        avrg_caps.append(avrg_cap_word_embeddings)
+        #print(avrg_cap_word_embeddings.shape)
+    return avrg_caps
 # lines = read_lines(TOKEN_FILE_TRAIN)
 # # see what is in lines
 # print(lines[:2])
