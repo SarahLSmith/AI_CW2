@@ -31,18 +31,19 @@ if __name__ == '__main__':
     # 
     #########################################################################
 
-    image_ids, cleaned_captions = parse_lines(lines)
+    image_ids, cleaned_captions, image_ref_dict = parse_lines(lines)
     # to check the results after writing the cleaning function
-    # print(image_ids[:2])
-    # print(cleaned_captions[:2])
+    print(image_ids[:2])
+    print(cleaned_captions[:2])
 
-    # vocab = build_vocab(cleaned_captions)
+    vocab = build_vocab(cleaned_captions)
     # to check the results
-    # print("Number of words in vocab:", vocab.idx)
-
+    print("Number of words in vocab:", vocab.idx)
+    print('checkpoint 1')
     # sample each image once
     image_ids = image_ids[::5]
-
+    print('checkpoint 2')
+    #print(image_ids)
 
     # crop size matches the input dimensions expected by the pre-trained ResNet
     data_transform = transforms.Compose([ 
@@ -61,7 +62,7 @@ if __name__ == '__main__':
         dataset_train,
         batch_size=64,
         shuffle=False,
-        num_workers=2,
+        num_workers=0,
     )
 
     # device configuration
@@ -86,41 +87,18 @@ if __name__ == '__main__':
         i = 0 
         for images in train_loader:
             images = images.to(device)
-            output = model(images)
+            output = model.forward(images)
             batch_features = output[:,:,0,0]
             features.append(batch_features)
             i = i + 1
-            print('Extracting features for batch: ', i, 'out of ', (len(dataset_train)//64))
+            print('Extracting features for batch: ', i, 'out of ', ((len(dataset_train)//64)+1))
 
         features = torch.cat(features)
         print('shape: ' , features.shape)
-        print(features)
-            
-
-    # with torch.no_grad():
-    #     it = iter(train_loader)
-    #     first_images = next(it)
-    #     images = first_images.to(device)
-    #     output = model(images)
-    #     print(output.shape)
-    #     output = output[:,:,0,0]
-    #     print(output.shape)
-    #     features = output
-    #     next_images = next(it)
-    #     next_images = next_images.to(device)
-    #     output_2 = model(next_images)
-    #     print(output_2.shape)
-    #     output_2 = output_2[:,:,0,0]
-    #     print(output_2.shape)
-    #     features = torch.cat((features, output_2), 0)
-    #     print(features)
-    #     print(features.shape)
-
-
-
-
-# to check your results, features should be dimensions [len(train_set), 2048]
-# convert features to a PyTorch Tensor before saving
+        #print(features)
+        
+# # to check your results, features should be dimensions [len(train_set), 2048]
+# # convert features to a PyTorch Tensor before saving
     print([len(dataset_train), 2048])
     print(features.shape)
 

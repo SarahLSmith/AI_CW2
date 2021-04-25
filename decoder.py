@@ -9,6 +9,7 @@ python decoder.py
 
 import torch
 import numpy as np
+import pandas as pd
 
 import torch.nn as nn
 from torchvision import transforms
@@ -28,7 +29,7 @@ if __name__ == '__main__':
 
     # reconstruct the captions and vocab, just as in extract_features.py
     lines = read_lines(TOKEN_FILE_TRAIN)
-    image_ids, cleaned_captions = parse_lines(lines)
+    image_ids, cleaned_captions, image_ref_dict = parse_lines(lines)
     vocab = build_vocab(cleaned_captions)
 
 
@@ -118,10 +119,10 @@ if __name__ == '__main__':
     else:
 
         test_lines = read_lines(TOKEN_FILE_TEST)
-        test_image_ids, test_cleaned_captions = parse_lines(test_lines)
+        test_image_ids, test_cleaned_captions, test_image_ref_dict = parse_lines(test_lines)
 
         all_test_image_ids = test_image_ids
-        test_image_ids = test_image_ids[::5]
+        single_test_image_ids = test_image_ids[::5]
 
         data_transform = transforms.Compose([ 
             transforms.Resize(224),     
@@ -140,7 +141,7 @@ if __name__ == '__main__':
             dataset_test,
             batch_size=64,
             shuffle=False,
-            num_workers=2,
+            num_workers=0,
         )
         
         # load models
@@ -162,29 +163,180 @@ if __name__ == '__main__':
             i = 0 
             for images in test_loader:
                 images = images.to(device)
-                output = encoder(images)
+                output = encoder.forward(images)
                 batch_test_features = output[:,:,0,0]
                 test_features.append(batch_test_features)
                 i = i + 1
                 print('Extracting features for batch: ', i, 'out of ', ((len(dataset_test)//64)+1))
-
-            test_features = torch.cat(test_features)
-            print('shape: ' , test_features.shape)
             #print(test_features)
+            all_test_features = torch.cat(test_features)
+            print('shape: ' , all_test_features.shape)
+            #print(test_features)
+        #all_test_features = all_test_features.repeat_interleave(5, 0)
+        dataset_test = Flickr8k_Features(
+            image_ids=all_test_image_ids,
+            captions=test_cleaned_captions,
+            vocab=vocab,
+            features=all_test_features,
+        )
+
+        test_loader = torch.utils.data.DataLoader(
+            dataset_test,
+            batch_size=1,
+            shuffle=False,
+            num_workers=0,
+            collate_fn=caption_collate_fn,
+        )
+
+    #     test_img_feats = dataset_test.features
+    #     print(test_img_feats.shape)
+    #     #test_img_feats = test_img_feats.to(device)
+    #     #sample_ids = decoder.sample(test_img_feats)
+    #     sample_ids = decoder.sample(all_test_features)
+    #     list_sample_ids = sample_ids.tolist()
+    # # print(test_loader.dataset_test[0])
+    # # for batch_idx, feats in enumerate(dataset_test.features):
+    # #     sample_ids = decoder.sample(feats)
+    # #     list_sample_ids = sample_ids.tolist()
+    #     targets = dataset_test.captions.tolist()
+
+    #     for idx, word_id in enumerate(list_sample_ids):
+
+    #         predicted_caption = decode_caption(word_id, vocab)
+    #         print(predicted_caption)
+    #         #print(captions[idx])
+            
+    #         target = targets[idx]
+    #         caption = ''
+    #         for i, cap_word_id in enumerate(target):
+    #             word = vocab.idx2word[cap_word_id]
+    #             if i < len(target):
+    #                 caption = caption + word + ' '
+    #             else:
+    #                 caption = caption + word
+    #         print(caption)
+        #print(images)
+        #print(captions)
+            #break
+        # break
+
+        # index = 0
+        # tars = []
+        # for i in range(len(dataset_test)):
+        #     feat, tar = dataset_test[i]
+        #     if (i == 0) or (i%5 == 0):
+        #         sample_ids = decoder.sample(feat)
+        #         list_sample_ids = sample_ids.tolist()
+        #         predicted_caption = decode_caption(list_sample_ids, vocab)
+        #         print('----------------------------------------------------------------------------------------------------------------------------------------------------------------------------')
+        #         print('Predicted caption for image: ', dataset_test.image_ids[i])
+        #         print('')
+        #         print(predicted_caption)
+        #         print('')
+        #         print('Reference captions: ')
+        #     else:
+        #         target = tar.tolist()
+        #         caption = ''
+        #         for idx, word_id in enumerate(target):
+        #             word = vocab.idx2word[word_id]
+        #             if idx < len(target):
+        #                 caption = caption + word + ' '
+        #             else:
+        #                 caption = caption + word
+        #         print(caption)
+
+            #print('Features: ', feat)
+            #print('Target :', tar)
+        #print(dataset_test[0])
+        # for idx, (inputs, captions, lengths) in enumerate(test_loader, 0):
+        #     image_feats = inputs.to(device)
 
         print('Generating captions...')
-        sample_ids = decoder.sample(test_features)
-        list_sample_ids = sample_ids.tolist()
+        index = 0
+        captions = []
+        bleu_scores = []
+        low_bleu = 0.01
+        high_bleu = 0.5
+        img_ref_dict = dict()
+        img_cap_pred_dict = dict()
+        img_bleu_dict = dict()
+        for batch_idx, (feats, caps, length) in enumerate(test_loader):
+            test_feats = feats.to(device)
+            sample_ids = decoder.sample(test_feats)
+            list_sample_ids = sample_ids.tolist()
+            targets = caps.tolist()
+            if (index%10 == 4) or (index%10 == 9):
+
+                captions.append(targets[0])
+                predicted_caption = decode_caption(list_sample_ids[0], vocab)
+                print('Predicted caption for image: ', test_image_ids[index])
+                print('')
+                print(predicted_caption)
+                print('')
+                print('Reference captions: ')
+                ref_captions = []
+                for i,  caption in enumerate(captions):
+                    ref_cap = decode_caption(caption, vocab)
+                    ref_captions.append(ref_cap)
+                    print(ref_cap)
+                
+                bleu = get_bleu_score(predicted_caption, ref_captions)
+                print('')
+                print('Bleu score: ', bleu)
+                bleu_scores.append(bleu)
+                print('')
+                image_ref_dict[test_image_ids[index]] = ref_captions
+                img_cap_pred_dict[test_image_ids[index]] = predicted_caption
+                img_bleu_dict[test_image_ids[index]] = bleu
+                
+                #reference_cap = decode_caption(targets[0], vocab)
+                #print(reference_cap)
+                captions = []
+                
+                print('----------------------------------------------------------------------------------------------------------------------------------------------------------------------------')
+            else:
+                captions.append(targets[0])
+            index = index + 1
+        print('Average BLEU score: ', (sum(bleu_scores)/len(bleu_scores)))
+        df = pd.DataFrame({'image_ids': single_test_image_ids})
+        df['predicted_caption'] = df['image_ids'].map(img_cap_pred_dict)
+        df['reference_captions'] = df['image_ids'].map(image_ref_dict)
+        df['bleu_score'] = df['image_ids'].map(img_bleu_dict)
+        print(df)
+        #display_image_captions(df.iloc[[0]])
+        low_df = df.sort_values(by=['bleu_score'], ascending=False)
+        display_image_captions(low_df.iloc[[0]])
+        high_df = df.sort_values(by=['bleu_score'], ascending=True)
+        display_image_captions(high_df.iloc[[0]])
+        # all_test_features = all_test_features.to(device)
+        # sample_ids = decoder.sample(all_test_features)
+        # print('Converting to list')
+        # list_sample_ids = sample_ids.tolist()
         #print(sample_ids)
 
         # TODO define decode_caption() function in utils.py
-
-        for idx, word_ids in enumerate(list_sample_ids):
-            predicted_caption = decode_caption(word_ids, vocab)
-            print('Predicted caption for: ', test_image_ids[idx])
-            print(predicted_caption)
-            print('----------------------------------------------------------------------------------------------------------------------------------------------------------------------------')
-
+            
+            # for idx, word_ids in enumerate(list_sample_ids):
+            #     predicted_caption = decode_caption(word_ids, vocab)
+            #     #print('Predicted caption for image: ', test_image_ids[index])
+            #     print('')
+            #     print(predicted_caption)
+            #     print('')
+            #     print('Reference captions: ')
+            #     reference_cap = decode_caption(targets[idx], vocab)
+            #     print(reference_cap)
+            #     #print(test_cleaned_captions[index])
+            #     # print(test_cleaned_captions[index+1])
+            #     # print(test_cleaned_captions[index+2])
+            #     # print(test_cleaned_captions[index+3])
+            #     # print(test_cleaned_captions[index+4])
+            #     #references = [test_cleaned_captions[index], test_cleaned_captions[index+1], test_cleaned_captions[index+2], test_cleaned_captions[index+3], test_cleaned_captions[index+4]]
+            #     #bleu = get_bleu_score(predicted_caption, references)
+            #     #print('Bleu score: ', bleu)
+            #     #index = index + 5
+            #     index = index + 1
+            #     print('----------------------------------------------------------------------------------------------------------------------------------------------------------------------------')
+            #     #break
 
 
     #########################################################################
@@ -196,6 +348,7 @@ if __name__ == '__main__':
 
         # Feel free to add helper functions to utils.py as needed,
         # documenting what they do in the code and in your report
+
 
 
 

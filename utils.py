@@ -2,7 +2,8 @@ import torch
 import pandas as pd
 from collections import Counter
 import matplotlib.pyplot as plt
-
+import string
+from PIL import Image
 from nltk.translate.bleu_score import sentence_bleu
 
 from vocabulary import Vocabulary
@@ -27,6 +28,27 @@ def read_lines(filepath):
     file.close()
     return lines
 
+def get_image_ref_captions_dict(image_id_lst, ref_captions):
+    image_ref_dict = dict()
+    for idx, image in enumerate(image_id_lst):
+        if image not in image_ref_dict:
+            image_ref_dict[image] = list()
+        image_ref_dict[image].append(ref_captions[idx])
+    
+    clean_ref_captions(image_ref_dict)
+    return image_ref_dict
+
+def clean_ref_captions(image_ref_dict):
+    for key, ref_captions_lst in image_ref_dict.items():
+        for item in range(len(ref_captions_lst)):
+            ref_caption = ref_captions_lst[item]
+            ref_caption = ref_caption.split()
+            ref_caption = [word.lower() for word in ref_caption]
+            ref_caption = [caption.translate(str.maketrans('', '', string.punctuation)) for caption in ref_caption]
+            ref_caption = [word for word in ref_caption if word.isalpha()]
+            ref_caption = [word for word in ref_caption if len(word)>1 or (word in ['a', 'i'])]
+            ref_captions_lst[item] = ' '.join(ref_caption)
+    # return image_ref_dict
 
 def parse_lines(lines):
     """
@@ -37,27 +59,52 @@ def parse_lines(lines):
         image_ids (int list): list of image ids, with duplicates
         cleaned_captions (list of lists of str): lists of words
     """
-    #### will create issue for 's as these will remain as s
+    # # QUESTION 1.1
+    #### In the comments below is my orginal solution for parse lines. This did not address the hanging "s" s after cleaning the captions.
+    #### Additionally, a dictionary with the image ids and their cleaned captions would be useful for comparing the generated captions with the reference captions.
+    #### This approach is similar to the one found here: https://machinelearningmastery.com/develop-a-deep-learning-caption-generation-model-in-python/
     image_ids = []
     cleaned_captions = []
+    captions = []
     
-    # QUESTION 1.1
-    bad_chars = '''!()-[]{};:`"'\,<>./?@#$%^&*_~1234567890'''
     for line in lines:
         image_id = line.split(".")
         image_ids.append(image_id[0])
-        
+    
         reference = line.split("\t")
         caption = reference[1]
-        for char in caption:
-        
-            if char in bad_chars:
-                caption = caption.replace(char, "")
-               
-        caption = caption.strip().lower()
-        cleaned_captions.append(caption)
+        captions.append(caption)
 
-    return image_ids, cleaned_captions
+    image_ref_dict = get_image_ref_captions_dict(image_ids, captions)
+
+    for key, ref_captions in image_ref_dict.items():
+        # cleaned_captions.append(ref_captions)
+        for ref_caption in ref_captions:
+            cleaned_captions.append(ref_caption)
+    
+    return image_ids, cleaned_captions, image_ref_dict
+
+    
+    # # QUESTION 1.1
+    # image_ids = []
+    # cleaned_captions = []
+    # bad_chars = '''!()-[]{};:`"'\,<>./?@#$%^&*_~1234567890'''
+    # for line in lines:
+    #     image_id = line.split(".")
+    #     image_ids.append(image_id[0])
+    
+    #     reference = line.split("\t")
+    #     caption = reference[1]
+        
+    #     for char in caption:
+        
+    #         if char in bad_chars:
+    #             caption = caption.replace(char, "")
+               
+    #     caption = caption.strip().lower()
+    #     cleaned_captions.append(caption)
+
+    # return image_ids, cleaned_captions
 
 
 def build_vocab(cleaned_captions):
@@ -86,11 +133,12 @@ def build_vocab(cleaned_captions):
     
     i = 0
     for word in all_words:
-        if (word not in common_words) and (all_words.count(word) > 3):
+
+        if (word not in common_words) and (all_words.count(word) > MIN_FREQUENCY):
             #print(word)
             common_words.append(word)
             i += 1
-            print("Number of common words found: ", i)
+            #print("Number of common words found so far: ", i)
     print("Total number of common words found: ", len(common_words))
 
 
@@ -123,12 +171,25 @@ def decode_caption(sampled_ids, vocab):
     """
     predicted_caption = ""
     #list_sampled_ids = sampled_ids.tolist()
-    for word_id in sampled_ids:
+    # i = 0
+    for idx, word_id in enumerate(sampled_ids):
+        #print(word_id)
         word = vocab.idx2word[word_id]
+        #print(word)
+        #predicted_caption = predicted_caption + word + ' '
+        # if i == 10:
+        #     break
+        # i = i + 1
         #predicted_caption = predicted_caption + word
+        # if idx == 10:
+        #     break
+        # else:
         if word == '<end>':
+        #if (word == '<end>') and (sampled_ids[idx-1] == word_id):
+            #predicted_caption = predicted_caption[:-6]
+            predicted_caption = predicted_caption[:-1]
             break
-        elif word == '<start>':
+        elif (idx == 0) and (word == '<start>'):
             continue
         else:
             predicted_caption = predicted_caption + word + ' '
@@ -170,10 +231,39 @@ def caption_collate_fn(data):
     targets = torch.zeros(len(captions), max(lengths)).long()
     for i, cap in enumerate(captions):
         end = lengths[i]
-        targets[i, :end] = cap[:end]        
+        targets[i, :end] = cap[:end]  
+    #print('IMAGES', images)
+    #print('TARGETS', targets)
+    #print('LENGTHS', lengths)      
     return images, targets, lengths
 
 
+
+def get_bleu_score(predicted_caption, reference_captions):
+    
+    predicted_words = predicted_caption.split()
+    reference_words_lst = []
+    for caption in reference_captions:
+        reference_words = caption.split()
+        reference_words_lst.append(reference_words)
+    # predicted_words_lst = [predicted_words]
+    #reference_words_lst = [reference_words_lst]
+    #print(reference_words_lst)
+    # print(predicted_words_lst)
+    bleu = sentence_bleu(reference_words_lst, predicted_words, weights=(1, 0, 0, 0))
+    return bleu
+
+def display_image_captions(row_df):
+    img_path = IMAGE_DIR + str(row_df.iloc[0]['image_ids']) + '.jpg'
+    img = Image.open(open(img_path, 'rb'))
+    show_img = plt.imshow(img)
+    plt.show()
+    print('Image ID: ', row_df.iloc[0]['image_ids'])
+    print('Predicted caption: ', row_df.iloc[0]['predicted_caption'])
+    print('Reference captions:')
+    for cap in row_df.iloc[0]['reference_captions']:
+        print(cap)
+    print('Bleu score: ', row_df.iloc[0]['bleu_score'])
 # lines = read_lines(TOKEN_FILE_TRAIN)
 # # see what is in lines
 # print(lines[:2])
@@ -184,10 +274,11 @@ def caption_collate_fn(data):
 # # 
 # #########################################################################
 
-# image_ids, cleaned_captions = parse_lines(lines)
+# image_ids, cleaned_captions, image_ref_dict = parse_lines(lines)
+# # to check the results after writing the cleaning function
+# print(image_ids[:2])
+# print(cleaned_captions[:2])
+
 # vocab = build_vocab(cleaned_captions)
-# print('Total vocab size: ', len(vocab))
-# print(vocab('girl'))
-# print(vocab('a'))
-# print(vocab('skateboard'))
-# print(len(image_ids))
+# # to check the results
+# print("Number of words in vocab:", vocab.idx)
