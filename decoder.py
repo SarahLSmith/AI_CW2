@@ -30,7 +30,7 @@ if __name__ == '__main__':
 
     # reconstruct the captions and vocab, just as in extract_features.py
     lines = read_lines(TOKEN_FILE_TRAIN)
-    image_ids, cleaned_captions, image_ref_dict = parse_lines(lines)
+    image_ids, cleaned_captions = parse_lines(lines)
     vocab = build_vocab(cleaned_captions)
 
 
@@ -91,8 +91,6 @@ if __name__ == '__main__':
             for batch_idx, (inputs, captions, lengths) in enumerate(train_loader, 0):
                 
                 inputs = inputs.to(device)
-                
-                #lengths = lengths.to(device)
                 targets = pack_padded_sequence(captions, lengths, batch_first=True)[0]
                 targets = targets.to(device)
                 captions = captions.to(device)
@@ -120,7 +118,7 @@ if __name__ == '__main__':
     else:
 
         test_lines = read_lines(TOKEN_FILE_TEST)
-        test_image_ids, test_cleaned_captions, test_image_ref_dict = parse_lines(test_lines)
+        test_image_ids, test_cleaned_captions = parse_lines(test_lines)
 
         all_test_image_ids = test_image_ids
         single_test_image_ids = test_image_ids[::5]
@@ -160,6 +158,7 @@ if __name__ == '__main__':
 
         test_features = []
 
+        #Extract image features
         with torch.no_grad():
             i = 0 
             for images in test_loader:
@@ -169,11 +168,10 @@ if __name__ == '__main__':
                 test_features.append(batch_test_features)
                 i = i + 1
                 print('Extracting features for batch: ', i, 'out of ', ((len(dataset_test)//64)+1))
-            #print(test_features)
             all_test_features = torch.cat(test_features)
             print('shape: ' , all_test_features.shape)
-            #print(test_features)
-        #all_test_features = all_test_features.repeat_interleave(5, 0)
+
+        #Prepare features
         dataset_test = Flickr8k_Features(
             image_ids=all_test_image_ids,
             captions=test_cleaned_captions,
@@ -190,14 +188,20 @@ if __name__ == '__main__':
         )
 
         print('Generating captions...')
+
+        #Init for generation captions
         index = 0
         captions = []
         predicted_captions_lst = []
         ref_captions_lst = []
         bleu_scores = []
+
+        #Dictionaries for dataframe
         img_ref_dict = dict()
         img_cap_pred_dict = dict()
         img_bleu_dict = dict()
+        
+        #Generate captions
         for batch_idx, (feats, caps, length) in enumerate(test_loader):
             test_feats = feats.to(device)
             sample_ids = decoder.sample(test_feats)
@@ -217,7 +221,8 @@ if __name__ == '__main__':
                     ref_cap = decode_caption(caption, vocab)
                     ref_captions.append(ref_cap)
                     print(ref_cap)
-                
+
+                #Get BLEU score
                 bleu = get_bleu_score(predicted_caption, ref_captions)
                 print('')
                 print('Bleu score: ', bleu)
@@ -236,9 +241,6 @@ if __name__ == '__main__':
                 captions.append(targets[0])
             index = index + 1
 
-
-        # TODO define decode_caption() function in utils.py
-
     #########################################################################
     #
     #        QUESTION 2.2-3 Caption evaluation via text similarity 
@@ -249,17 +251,17 @@ if __name__ == '__main__':
         # Feel free to add helper functions to utils.py as needed,
         # documenting what they do in the code and in your report
 
+        #Get average generated caption embedding vector
         avrg_pred_caps = get_average_caption_vectors(predicted_captions_lst, decoder, device, vocab)
-        #avrg_pred_caps = torch.tensor(avrg_pred_caps)
-        #print(len(avrg_pred_caps))
+       
+       #Get average reference captions embedding vectors 
         all_avrg_ref_caps = []
         for ref_caps in ref_captions_lst:
             avrg_ref_caps = get_average_caption_vectors(ref_caps, decoder, device, vocab)
-            #print(len(avrg_ref_caps))
             all_avrg_ref_caps.append(avrg_ref_caps)
-        #print(len(all_avrg_ref_caps))
+     
+        # Calculating cosine similarity
         all_avrg_cosine_scores = []
-        
         for i, avrg_gen_cap in enumerate(avrg_pred_caps):
             avrg_gen_cap = avrg_gen_cap.to('cpu')
             avrg_gen_cap = avrg_gen_cap.detach().numpy()
@@ -276,69 +278,50 @@ if __name__ == '__main__':
             cosine_scores = torch.cat(cosine_scores)
             avrg_cosine_score = torch.mean(cosine_scores)
             all_avrg_cosine_scores.append(avrg_cosine_score.item())
-            #print(avrg_cosine_score.item())
-            #break
-        
 
+        #Rescale cosine similarity scores to 0 - 1
         arr_all_avrg_cosine_scores = np.array(all_avrg_cosine_scores)
         arr_all_avrg_cosine_scores = arr_all_avrg_cosine_scores.reshape(-1, 1)
         min_max_scaler = MinMaxScaler()
-        
         arr_rescaled_cosine = min_max_scaler.fit_transform(arr_all_avrg_cosine_scores)
-
         min_max_scaler.transform(arr_rescaled_cosine)
-
         arr_rescaled_avrg_cosine_scores_flat = arr_rescaled_cosine.flatten()
-        #print(arr_rescaled_avrg_cosine_scores_flat)
         rescaled_avrg_cosine_scores = arr_rescaled_avrg_cosine_scores_flat.tolist()
 
+        #Create dictionaries for cosine similarity values for dataframe
         img_rescaled_cosine_dict = dict()
         img_cosine_dict = dict()
         for idx, img in enumerate(single_test_image_ids):
             img_cosine_dict[img] = all_avrg_cosine_scores[idx]
             img_rescaled_cosine_dict[img] = rescaled_avrg_cosine_scores[idx]
         
+        #Print average BLEU and Cosine similarity scores.
         print('Average BLEU score: ', (sum(bleu_scores)/len(bleu_scores)))
         print('Average Cosine Similarity score: ', (sum(all_avrg_cosine_scores)/len(all_avrg_cosine_scores)))
 
+        # Colatting values in dataframe
         df = pd.DataFrame({'image_ids': single_test_image_ids})
         df['predicted_caption'] = df['image_ids'].map(img_cap_pred_dict)
         df['reference_captions'] = df['image_ids'].map(image_ref_dict)
         df['bleu_score'] = df['image_ids'].map(img_bleu_dict)
         df['cosine_score'] = df['image_ids'].map(img_cosine_dict)
         df['rescaled_cosine_score'] = df['image_ids'].map(img_rescaled_cosine_dict)
+    
+        # Find high and low BLEU examples
+        high_bleu = df.sort_values(by=['bleu_score'], ascending=False)
+        display_image_captions_bleu(high_bleu.iloc[[0]])
+        low_df = df.sort_values(by=['bleu_score'], ascending=True)
+        display_image_captions_bleu(low_df.iloc[[0]])
+
+        #Find high and low cosine similarity examples
+        high_cosine = df.sort_values(by=['cosine_score'], ascending=False)
+        display_image_captions_cosine(high_cosine.iloc[[0]])
+        low_cosine = df.sort_values(by=['cosine_score'], ascending=True)
+        display_image_captions_cosine(low_cosine.iloc[[0]])
         
-
-        # print(df)
-      
-        # high_bleu = df.sort_values(by=['bleu_score'], ascending=False)
-        # display_image_captions_bleu(high_bleu.iloc[[0]])
-        # low_df = df.sort_values(by=['bleu_score'], ascending=True)
-        # display_image_captions_bleu(low_df.iloc[[0]])
-
-        rescaled_df = df.sort_values(by=['rescaled_cosine_score'], ascending=True)
-        print(rescaled_df)
-
-        # display_image_captions_cosine(high_cosine.iloc[[0]])
-        # low_cosine = df.sort_values(by=['cosine_score'], ascending=True)
-        # display_image_captions_cosine(low_cosine.iloc[[0]])
-        
-        #print(low_cosine)
-        # avrg_pred_caps = []
-        # for pred_cap in predicted_captions_lst:
-        #     word_embeddings = []
-        #     for word in pred_cap.split():
-        #         lookup_tensor = torch.tensor([vocab.word2idx[word]], dtype=torch.long)
-        #         lookup_tensor = lookup_tensor.to(device)
-        #         embedding = decoder.embed(lookup_tensor)
-        #         word_embeddings.append(embedding)
-        #     cap_word_embeddings = torch.cat(word_embeddings)
-        #     sum_cap_word_embeddings = cap_word_embeddings.sum(0)
-        #     avrg_cap_word_embeddings = torch.div(sum_cap_word_embeddings, cap_word_embeddings.shape[1])
-        #     avrg_pred_caps.append(avrg_cap_word_embeddings)
-        #     print(avrg_cap_word_embeddings.shape)
-            
-        #     break
+        #pd.set_option('display.max_rows', None)
+        # rescaled_df = df.sort_values(by=['rescaled_cosine_score'], ascending=True)
+        # print(rescaled_df)
 
 
 

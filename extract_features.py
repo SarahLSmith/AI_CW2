@@ -31,7 +31,7 @@ if __name__ == '__main__':
     # 
     #########################################################################
 
-    image_ids, cleaned_captions, image_ref_dict = parse_lines(lines)
+    image_ids, cleaned_captions = parse_lines(lines)
     # to check the results after writing the cleaning function
     print(image_ids[:2])
     print(cleaned_captions[:2])
@@ -95,7 +95,7 @@ if __name__ == '__main__':
 
         features = torch.cat(features)
         print('shape: ' , features.shape)
-        #print(features)
+
         
 # # to check your results, features should be dimensions [len(train_set), 2048]
 # # convert features to a PyTorch Tensor before saving
